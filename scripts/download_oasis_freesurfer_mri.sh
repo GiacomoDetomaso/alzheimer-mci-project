@@ -1,0 +1,253 @@
+#!/bin/bash
+#
+#================================================================
+# download_oasis_freesurfer.sh
+#================================================================
+#
+# Usage: ./download_oasis_freesurfer.sh <input_file.csv> <directory_name> <nitrc_ir_username>
+# 
+# Download Freesurfer files from OASIS3 or OASIS4 on NITRC IR and organize the files
+#
+# Required inputs:
+# <input_file.csv> - A Unix formatted, comma-separated file containing a column for freesurfer_id 
+#       (e.g. OAS30001_Freesurfer53_d0129)
+# <directory_name> - A directory path (relative or absolute) to save the Freesurfer files to
+# <nitrc_ir_username> - Your NITRC IR username used for accessing OASIS data on nitrc.org/ir
+#       (you will be prompted for your password before downloading)
+# <files_to_keep> - A list of files to keep inside the downloaded mri folder. The files shoud be specified using 
+#       the following format: "f1.mgz f2.mgz f3.mgz...". All files whose names is not equal to the specified ones 
+#       will be deleted. If the parameter is not specified all files will be kept
+#
+#
+# This script organizes the files into folders like this:
+#
+# directory_name/OAS30001_MR_d0129/$FREESURFER_FOLDERS
+#
+#
+# Last Updated: 6/27/2024
+# Author: Sarah Keefe
+#
+#
+unset module
+
+# Authenticates credentials against NITRC and returns the cookie jar file name. USERNAME and
+# PASSWORD must be set before calling this function.
+#   USERNAME="foo"
+#   PASSWORD="bar"
+#   COOKIE_JAR=$(startSession)
+startSession() {
+    # Authentication to XNAT and store cookies in cookie jar file
+    local COOKIE_JAR=.cookies-$(date +%Y%M%d%s).txt
+    curl -k -s -u ${USERNAME}:${PASSWORD} --cookie-jar ${COOKIE_JAR} "https://www.nitrc.org/ir/data/JSESSION" > /dev/null
+    echo ${COOKIE_JAR}
+}
+
+# Downloads a resource from a URL and stores the results to the specified path. The first parameter
+# should be the destination path and the second parameter should be the URL.
+download() {
+    local OUTPUT=${1}
+    local URL=${2}
+    curl -H 'Expect:' --keepalive-time 2 -k --cookie ${COOKIE_JAR} -o ${OUTPUT} ${URL}
+}
+
+# Downloads a resource from a URL and stores the results to the specified path. The first parameter
+# should be the destination path and the second parameter should be the URL. This function tries to
+# resume a previously started but interrupted download.
+continueDownload() {
+    local OUTPUT=${1}
+    local URL=${2}
+    curl -H 'Expect:' --keepalive-time 2 -k --continue - --cookie ${COOKIE_JAR} -o ${OUTPUT} ${URL}
+}
+
+# Gets a resource from a URL.
+get() {
+    local URL=${1}
+    curl -H 'Expect:' --keepalive-time 2 -k --cookie ${COOKIE_JAR} ${URL}
+}
+
+# Ends the user session.
+endSession() {
+    # Delete the JSESSION token - "log out"
+    curl -i -k --cookie ${COOKIE_JAR} -X DELETE "https://www.nitrc.org/ir/data/JSESSION"
+    rm -f ${COOKIE_JAR}
+}
+
+# The function check if the input string do not contain more than a single space between words
+is_valid_format() {
+    local INPUT_STRING="$1"
+
+    # Ensure input does not start or end with a space and has only single spaces between words
+    if [[ "$INPUT_STRING" =~ ^[a-zA-Z0-9._-]+( [a-zA-Z0-9._-]+)*$ ]]; then
+        return 0  # Valid format
+    else
+        echo "Error: Input must be words separated by single spaces only." >&2
+        return 1  # Invalid format
+    fi
+}
+
+removeFoldersExceptMri() {
+    TARGET_DIR=$1
+
+    for FOLDER in "$TARGET_DIR"/*/; do
+        FOLDER_NAME=$(basename "$FOLDER")
+
+        if [[ "$FOLDER_NAME" != "mri" ]]; then
+            echo "Deleting folder: $FOLDER"
+            rm -r "$FOLDER"
+        else
+            echo "Skipping: $FOLDER (protected)"
+        fi
+    done
+}
+
+removeFilesInMri() {
+    MRI_DIR="$1/mri"
+    INPUT_STRING="$2"
+
+    # Convert the input string into array
+    IFS=' ' read -r -a FILES_TO_KEEP <<< "$INPUT_STRING"  # Convert input string to array
+
+    # Step 2: Inside "mri", delete all files that are NOT in the FILES_TO_KEEP array
+    if [[ -d "$MRI_DIR" ]]; then
+        for FILE in "$MRI_DIR"/*; do
+            FILE_NAME=$(basename "$FILE")
+            KEEP_FILE=false
+
+            # Check if the file should be kept
+            for KEEP in "${FILES_TO_KEEP[@]}"; do
+                if [[ "$FILE_NAME" == "$KEEP" ]]; then
+                    KEEP_FILE=true
+                    break
+                fi
+            done
+
+            # Delete file if it's NOT in the keep list
+            if ! $KEEP_FILE; then
+                echo "Deleting file: $FILE"
+                rm -rf "$FILE"
+            else
+                echo "Keeping file: $FILE"
+            fi
+        done
+    else
+        echo "Warning: 'mri' folder does not exist."
+    fi
+
+    echo "✅ Cleanup completed!"
+}
+
+# usage instructions
+if [ ${#@} == 0 ]; then
+    echo ""
+    echo "OASIS Freesurfer download script"
+    echo ""
+    echo "This script downloads Freesurfer files based on a list of session ids in a csv file. "
+    echo ""   
+    echo "Usage: $0 input_file.csv directory_name nitrc_username scan_type"
+    echo "<input_file>: A Unix formatted, comma separated file containing the following columns:"
+    echo "    freesurfer_id (e.g. OAS30001_Freesurfer53_d0129)"
+    echo "<directory_name>: Directory path to save Freesurfer files to"  
+    echo "<nitrc_ir_username>: Your NITRC IR username used for accessing OASIS data (you will be prompted for your password)"  
+    echo "A list of files to keep inside the downloaded mri folder. The files shoud be specified using the following format: "f1.mgz f2.mgz f3.mgz...""
+    echo "    All files whose names is not equal to the specified ones will be deleted."
+    echo "    If the parameter is not specified all files will be kept"
+else 
+    # Get the input arguments
+    INFILE=$1
+    DIRNAME=$2
+    USERNAME=$3
+    PASSWORD=$4
+    MRI_FILES=$5
+
+    # Create the directory if it doesn't exist yet
+    if [ ! -d $DIRNAME ]
+    then
+        mkdir $DIRNAME
+    fi
+
+    if [[ -z $MRI_FILES ]] || is_valid_format "$MRI_FILES"; 
+    then 
+        # Read in password
+        #read -s -p "Enter your password for accessing OASIS data on NITRC IR:" PASSWORD
+
+        echo ""
+
+        COOKIE_JAR=$(startSession)
+
+        # Read the file
+        sed 1d $INFILE | while IFS=, read -r FREESURFER_ID; do
+
+            # Get the subject ID from the first part of the experiment ID (OAS30001 from ID OAS30001_Freesurfer53_d0129)
+            SUBJECT_ID=`echo $FREESURFER_ID | cut -d_ -f1`
+
+            # Get the days from entry from the third part of the experiment ID (d0129 from ID OAS30001_Freesurfer53_d0129)
+            DAYS_FROM_ENTRY=`echo $FREESURFER_ID | cut -d_ -f3`
+
+            # combine to form the experiment label (OAS30001_MR_d0129)
+            EXPERIMENT_LABEL=${SUBJECT_ID}_MR_${DAYS_FROM_ENTRY}
+
+
+            # Set project in URL based on experiment ID
+            # default to OASIS3
+            PROJECT_ID=OASIS3
+            # If the experiment ID provided starts with OASIS4 then use project=OASIS4 in the URL
+            if [[ "${EXPERIMENT_LABEL}" == "OAS4"* ]]; then
+                PROJECT_ID=OASIS4
+            fi
+
+            # Get a JSESSION for authentication to XNAT
+            echo "Checking for Freesurfer ID ${FREESURFER_ID} associated with ${EXPERIMENT_LABEL}."
+
+            # Set up the download URL and make a cURL call to download the requested scans in zip format
+            download_url=https://www.nitrc.org/ir/data/archive/projects/${PROJECT_ID}/subjects/${SUBJECT_ID}/experiments/${EXPERIMENT_LABEL}/assessors/${FREESURFER_ID}/files?format=zip
+
+            download $DIRNAME/$FREESURFER_ID.zip $download_url
+
+            # Check the zip file to make sure we downloaded something
+            # If the zip file is invalid, we didn't download a scan so there is probably no scan of that type
+            # If the zip file is valid, unzip and rearrange the files
+            if zip -Tq $DIRNAME/$FREESURFER_ID.zip > /dev/null; then
+                # We found a successfully downloaded valid zip file
+
+                echo "Downloaded a Freesurfer (${FREESURFER_ID}) from ${EXPERIMENT_LABEL}." 
+
+                echo "Unzipping Freesurfer and rearranging files."
+
+                # Unzip the downloaded file
+                unzip $DIRNAME/$FREESURFER_ID.zip -d $DIRNAME
+
+                # Rearrange the files so there are fewer subfolders
+                # Move the main Freesurfer subfolder up 5 levels
+                # Ends up like this:
+                # directory_name/OAS30001_MR_d0129/freesurfer_folders
+                # directory_name/OAS30001_MR_d0129/etc
+                mv $DIRNAME/$FREESURFER_ID/out/resources/DATA/files/* $DIRNAME/.
+
+                # Change permissions on the output files
+                chmod -R u=rwX,g=rwX $DIRNAME/*
+
+                # do this so we don't have to use rm -rf. 
+                rmdir $DIRNAME/$FREESURFER_ID/out/resources/DATA/files
+                rmdir $DIRNAME/$FREESURFER_ID/out/resources/DATA
+                rmdir $DIRNAME/$FREESURFER_ID/out/resources
+                rmdir $DIRNAME/$FREESURFER_ID/out
+                rmdir $DIRNAME/$FREESURFER_ID
+
+                # Remove the Freesurfer zip file that the files were moved from
+                rm -r $DIRNAME/$FREESURFER_ID.zip
+                
+                removeFoldersExceptMri $DIRNAME/$EXPERIMENT_LABEL
+
+                # Remove files only if specified
+                if [ -n "$MRI_FILES" ]; 
+                then
+                    removeFilesInMri $DIRNAME/$EXPERIMENT_LABEL "$MRI_FILES"
+                fi
+            else
+                echo "Could not get Freesurfer ${FREESURFER_ID} in ${EXPERIMENT_LABEL}."           
+            fi    
+        done < $INFILE
+
+        endSession
+    fi
+fi
