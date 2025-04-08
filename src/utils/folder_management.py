@@ -14,14 +14,25 @@ class DataManagerMRI:
         if not os.path.isdir(freesurfer_output_dir):
             os.mkdir(freesurfer_output_dir)
 
-    def __build_download_url(self, subjects, experiments, assessors):
+    def __build_download_url(self, subject:str, experiment:str, assessor:str) -> str:
+        """
+            This method is used to build a correct download URL 
+
+            ## Args 
+                - subjects (str): the id of the suject to download
+                - experiment (str): the id of the experiment related to the subject
+                - assessor (str): the id of the freesurfer asssessment for the subject
+            
+            ## Returns 
+                The url string
+        """
         args = [
             "/subjects/", 
-            subjects, 
+            subject, 
             "/experiments/", 
-            experiments, 
+            experiment, 
             "/assessors/",
-            assessors, 
+            assessor, 
             "/files?format=zip"
         ]
 
@@ -34,9 +45,37 @@ class DataManagerMRI:
             fs_id:str, 
             experiment_label:str, 
             files_to_keep:list[str]=[]
-        ):
+        ) -> None:
+        """
+            Perform all post processing operation to the data extracted, which include:
+                1. Moving the mri folder in a new one name SUBJECTID_MR_TIME
+                2. Remove all the downloaded content (dirs and files), except the mri folder previously moved
+                3. If specified remove all the files that do not match to the input list
 
-        source = os.path.join(self.output_dir, fs_id, 'out', 'resources', 'DATA', 'files', experiment_label, 'mri')
+            ## Args
+                - fs_id (str): the id of the downloade freesurfer
+                - experiment_label (str): the name of the new folder that will contain mri
+                - files_to_keep (list): a list of files to keep (default empty = all files are kept)
+
+            ## Returns
+                The method does not return value, but it changes directory structure as specified 
+                in the above description.
+
+        """
+        # The original location of the mri folder
+        source = os.path.join(
+            self.output_dir, 
+            fs_id, 
+            'out', 
+            'resources', 
+            'DATA', 
+            'files', 
+            experiment_label, 
+            'mri'
+        )
+        
+        # The destination of the mri folder will a directory name like: 
+        # OAS30001_MR_d0129 inside the output one
         dest = os.path.join(self.output_dir, experiment_label)
 
         # Overwrite the folder if it already exsist
@@ -54,6 +93,7 @@ class DataManagerMRI:
 
         # Remove all the files whose name do not match with files_to_keep list
         if len(files_to_keep) > 0:
+            # Locate the mri folder inside the destination
             mri_folder = os.path.join(dest, 'mri')
 
             for file in os.listdir(mri_folder):
@@ -73,6 +113,9 @@ class DataManagerMRI:
 
 
     def download(self, subjects_file_path:str, username:str, password:str, files_to_keep:list=[]):
+        """
+            # TODO
+        """
         fs_id_list = []
 
         # Obtain the list of subjects to download
