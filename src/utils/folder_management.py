@@ -114,7 +114,20 @@ class DataManagerMRI:
 
     def download(self, subjects_file_path:str, username:str, password:str, files_to_keep:list=[]):
         """
-            # TODO
+            Download freesurfer MRI data from the OASIS repository.
+            
+            ## Args
+                - subjects_file_path (str): path to a csv file containing the freesurfer id 
+                                            for each subject to download (e.g. OAS30001_Freesurfer53_d0129)
+                - username (str): your username on NITRC
+                - password (str): the password of your account on NITRC
+                - files_to_keep (list): a list of files to keep after the download of the mri folder for
+                                        each subject specified in `subjects_file_path`. If the parameter
+                                        is not specified, or if the list is empty all files will be kept.
+                                        
+            ## Returns
+                The method does not return any value but it downloads the files in the folder specified 
+                within the constructor via the property `output_dir`.
         """
         fs_id_list = []
 
@@ -165,9 +178,18 @@ class DataManagerMRI:
             raise Exception("""There must be at list one subject freesurfer id in 
                                the input csv specified with output_dir paramater. Got None.""")
 
-    def clean_freesurfers(self, base_empty_dir, mri_dir):
+    def clean_freesurfers(self, base_empty_dir:str, mri_dir:str='mri') -> None:
         """
-            # TODO doc
+            When data is downloaded some folder may be empty. This method transfer these folders
+            to a new directory, cleaning `output_dir`.
+            
+            ## Args
+                - base_empty_dir (str): the path to the folder that will contain empty freesurfers
+                - mri_dir (str): the name of the mri folder (usually mri)
+            
+            ## Returns 
+                The method does not return any value but it modify folder structure
+                according to its description
         """
         # Create an empty dir
         if not os.path.isdir(base_empty_dir):

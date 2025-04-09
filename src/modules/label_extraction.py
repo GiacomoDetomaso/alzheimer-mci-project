@@ -23,10 +23,19 @@ def get_time_column(col:pd.Series) -> pd.Series:
 def fix_negative_time_label(
         df:pd.DataFrame, 
         time_col_name:str, 
-        subject_col_name:str
+        subject_session_col_name:str
     ) -> pd.DataFrame:
     """
-        # TODO doc comments
+        This function is used to fix some errors on the OASIS dataset involving 
+        subjects with negative day to visit value.
+        
+        ## Args
+            df (pd.DataFrame): input dataframe
+            time_col_name (str): the name of the column containig time information inside `df`
+            subject_session_col_name (str): the name of the column containg the subject 
+                                            session label in `df`
+        ## Returns
+            An updated `pd.DataFrame` formatted in the following way: `df[[subject_col_name, time_col_name]]`
     """
     # Work on a copy of the DataFrame
     df_copy = df.copy(deep=True)
@@ -35,9 +44,9 @@ def fix_negative_time_label(
     df_copy[time_col_name] = np.abs(df_copy[time_col_name])
 
     # Change the name of the subjects
-    df_copy[subject_col_name] = df_copy[subject_col_name].str.replace('-', '')
+    df_copy[subject_session_col_name] = df_copy[subject_session_col_name].str.replace('-', '')
 
-    return df_copy[[subject_col_name, time_col_name]]
+    return df_copy[[subject_session_col_name, time_col_name]]
 
 
 def __map_time_to_CDR(
@@ -55,12 +64,14 @@ def __map_time_to_CDR(
     upper_bound_idx = None
     lower_bound_idx = None
     
+    # Calculates the bounds only if the sequence of values is not empty
     if len(possible_upper_bounds[time_col_name]) != 0:
         upper_bound_idx = possible_upper_bounds[time_col_name].idxmin()
 
     if len(possible_lower_bounds[time_col_name]) != 0:    
         lower_bound_idx = possible_lower_bounds[time_col_name].idxmax() 
 
+    # Extract upper and lower bounds to x
     cdr_ub = possible_upper_bounds.loc[upper_bound_idx, target_col_name] if upper_bound_idx != None else None
     cdr_lb = possible_lower_bounds.loc[lower_bound_idx, target_col_name] if lower_bound_idx != None else None
 
@@ -87,26 +98,43 @@ def get_CDR_column(
         target_df:pd.DataFrame, 
         source_df:pd.DataFrame,
         subject_col_name:str,
-        target_col_name:str,
+        cdr_col_name:str,
         time_col_name:str='time',
-    ) -> pd.DataFrame:
+    ) -> pd.Series:
     """
-        # TODO doc comments
+        This function returns a column containing the CDR of a subject who underwent 
+        an MRI scan in a certain period of time. It maps the time period of the MRI 
+        scan with the assessment of CDR made (usually immediately following the scan).
+        
+        ## Args
+            - target_df (pd.DataFrame): it contains the data abount CDR assessment to extract
+            - source_df (pd.DataFrame): it contains the data on which the CDR info needs to be added
+            - subject_col_name (str): the name of the subject column (the one that contains 
+                                      values like OAS30001) in `source_df`
+            - cdr_col_name (str): the name of the column containg cdr informations in `target_df`
+            - time_col_name (str): the name of the column containig time information inside both df
+            
+        ## Returns
+            A series with the same number of rows as `source_df`, with the cdr to add to it
     """
     subjects_list = source_df[subject_col_name].unique().tolist()
     source_df_copy = source_df.copy(deep=True)
 
     # Instantiate the output columns filling them with NA values
-    source_df_copy[target_col_name] = pd.NA
+    source_df_copy[cdr_col_name] = pd.NA
 
     for subject in subjects_list:
         # Get sub dataframe related to a particular subject
         sub_target_cond = target_df[subject_col_name] == subject
         sub_source_cond = source_df_copy[subject_col_name] == subject
 
-        args = (target_df[sub_target_cond], time_col_name, target_col_name)
+        # Args to pass to pandas apply method: 
+        # 1) Target dataframe slice related to actual subject
+        # 2) Name of time column
+        # 3) Name of CDR column which is the target
+        args = (target_df[sub_target_cond], time_col_name, cdr_col_name)
 
-        source_df_copy.loc[sub_source_cond, target_col_name] = (
+        source_df_copy.loc[sub_source_cond, cdr_col_name] = (
             source_df_copy
                 .loc[sub_source_cond, time_col_name] # Select time column for the slice of target df
                 .apply(
@@ -115,7 +143,15 @@ def get_CDR_column(
                 )
         )
 
-    return source_df_copy[target_col_name]
+    return source_df_copy[cdr_col_name]
 
-def align_labels(target_series:pd.Series):
-    pass
+
+def align_labels(df:pd.DataFrame, subject_col_name:str, cdr_col_name:str):
+    subjects_list = df[subject_col_name].unique().tolist()
+    
+    for subject in subjects_list:
+        sub_df_cond = df[subject_col_name] == subject
+
+        if not df.loc[sub_df_cond, cdr_col_name].is_monotonic_increasing:
+            pass
+    
