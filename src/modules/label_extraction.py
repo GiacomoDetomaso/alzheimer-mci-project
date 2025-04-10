@@ -13,7 +13,6 @@ def get_time_column(col:pd.Series) -> pd.Series:
         ## Returns
             - A series that contains the time values corresponding to the input series      
     """
-
     # The time information is located at the second element
     # of the split method. Ignore the first charachter of the 
     # resulting string to treat the resulting series as integer
@@ -53,27 +52,28 @@ def __map_time_to_CDR(
         x:int, 
         sub_target_df:pd.DataFrame, 
         time_col_name:str, 
-        target_col_name:str
+        cdr_col_name:str,
     ):
-    # The possible labels are the ones where the time value is greater or lower than x
-    # which is the time value for the current subject in the outer loop. This defines upper 
-    # and lower bound to x 
+    # The possible labels are the ones where the time value in the target_df is greater or lower 
+    # than x (which is the time value for the current subject in the outer loop). 
+    # This defines upper and lower bound to x, based on diagnosis' time in sub_target_df
     possible_upper_bounds = sub_target_df.loc[sub_target_df[time_col_name] >= x]
     possible_lower_bounds = sub_target_df.loc[sub_target_df[time_col_name] <= x]
 
     upper_bound_idx = None
     lower_bound_idx = None
     
-    # Calculates the bounds only if the sequence of values is not empty
+    # Calculate the upper bound only if the sequence of values is not empty
     if len(possible_upper_bounds[time_col_name]) != 0:
         upper_bound_idx = possible_upper_bounds[time_col_name].idxmin()
 
+    # Calculate lower bound only if the the sequence of values is not empty
     if len(possible_lower_bounds[time_col_name]) != 0:    
         lower_bound_idx = possible_lower_bounds[time_col_name].idxmax() 
 
-    # Extract upper and lower bounds to x
-    cdr_ub = possible_upper_bounds.loc[upper_bound_idx, target_col_name] if upper_bound_idx != None else None
-    cdr_lb = possible_lower_bounds.loc[lower_bound_idx, target_col_name] if lower_bound_idx != None else None
+    # Extract upper and lower bounds corresponding cdr value
+    cdr_ub = possible_upper_bounds.loc[upper_bound_idx, cdr_col_name] if upper_bound_idx != None else None
+    cdr_lb = possible_lower_bounds.loc[lower_bound_idx, cdr_col_name] if lower_bound_idx != None else None
 
     if cdr_ub == None:
         # The upper bound cdr is empty
@@ -94,13 +94,13 @@ def __map_time_to_CDR(
     return final_cdr
 
 
-def get_CDR_column(
+def get_mapped_target_column(
         target_df:pd.DataFrame, 
         source_df:pd.DataFrame,
         subject_col_name:str,
-        cdr_col_name:str,
+        target_col_name:str,
         time_col_name:str='time',
-    ) -> pd.Series:
+    ) -> pd.DataFrame:
     """
         This function returns a column containing the CDR of a subject who underwent 
         an MRI scan in a certain period of time. It maps the time period of the MRI 
@@ -111,17 +111,19 @@ def get_CDR_column(
             - source_df (pd.DataFrame): it contains the data on which the CDR info needs to be added
             - subject_col_name (str): the name of the subject column (the one that contains 
                                       values like OAS30001) in `source_df`
-            - cdr_col_name (str): the name of the column containg cdr informations in `target_df`
+            - target_col_name (str): the name of the column containg target informations in `target_df`
+            - diagnosis_col_name (str): the name of the column contining the diagnosis information in target_df`
             - time_col_name (str): the name of the column containig time information inside both df
             
         ## Returns
-            A series with the same number of rows as `source_df`, with the cdr to add to it
+            A DataFrame with the same rows as `source_df` with the columns 
+            [`target_col_name`, `diagnosis_col_name`]
     """
     subjects_list = source_df[subject_col_name].unique().tolist()
     source_df_copy = source_df.copy(deep=True)
 
     # Instantiate the output columns filling them with NA values
-    source_df_copy[cdr_col_name] = pd.NA
+    source_df_copy[target_col_name] = pd.NA
 
     for subject in subjects_list:
         # Get sub dataframe related to a particular subject
@@ -132,9 +134,9 @@ def get_CDR_column(
         # 1) Target dataframe slice related to actual subject
         # 2) Name of time column
         # 3) Name of CDR column which is the target
-        args = (target_df[sub_target_cond], time_col_name, cdr_col_name)
+        args = (target_df[sub_target_cond], time_col_name, target_col_name)
 
-        source_df_copy.loc[sub_source_cond, cdr_col_name] = (
+        source_df_copy.loc[sub_source_cond, target_col_name] = (
             source_df_copy
                 .loc[sub_source_cond, time_col_name] # Select time column for the slice of target df
                 .apply(
@@ -143,15 +145,108 @@ def get_CDR_column(
                 )
         )
 
-    return source_df_copy[cdr_col_name]
+    return source_df_copy[target_col_name]
 
 
-def align_labels(df:pd.DataFrame, subject_col_name:str, cdr_col_name:str):
+def align_labels(df:pd.DataFrame, subject_col_name:str, target_col_name:str) -> pd.Series:
+    """
+        This function fix dataset errors where there are some cdr for certain patients
+        whose sequence is not monotonically increasing. For example the following wrong 
+        sequence [0 .0.5 0 0.5 0] becomes [0 0.5 0.5 0.5 0.5].
+
+        ## Args
+
+        - df (pd.DataFrame): DataFrame on which the operations will be applied (actually the DF is deep copied)
+        - subject_col_name (str): the name of the subject column (the one that contains 
+                                      values like OAS30001) in `df`
+        - target_col_name (str): the name of the column to align in `df`. It must be numeric.
+
+        ## Returns
+            A series with the same number of rows as `df`, with the cdr aligned 
+    """
     subjects_list = df[subject_col_name].unique().tolist()
+    df_copy = df.copy(deep=True)
     
     for subject in subjects_list:
-        sub_df_cond = df[subject_col_name] == subject
+        sub_df_cond = df_copy[subject_col_name] == subject
 
-        if not df.loc[sub_df_cond, cdr_col_name].is_monotonic_increasing:
-            pass
+        cdr_series = df_copy.loc[sub_df_cond, target_col_name]
+
+        if not cdr_series.is_monotonic_increasing:
+            cdr_list = cdr_series.tolist()
+            
+            for i in range(1, len(cdr_list), 1):
+                # Update the cdr by substituting element i with element i-1 when element i 
+                # is less then element i-1, since cdr must be monotonically increasing
+                cdr_list[i] = cdr_list[i] if (cdr_list[i-1] <= cdr_list[i]) else cdr_list[i-1]
+            
+            # Assign the updated series on the current slice of the dataframe
+            df_copy.loc[sub_df_cond, target_col_name] = pd.Series(cdr_list, cdr_series.index)
+
+    return df_copy[target_col_name]
+
+
+def simplify_diagnosis_label(dx: pd.Series, non_dem:list, mapping_dict:dict):
+    """
+        This function maps the diagnosis labels into two main category: Non-Demented
+        and Demented.
+
+        ## Args
+            - dx (pd.Series): the series of the diagnosis 
+            - non_dem (list): categories to NOT map into dementia
+            - mapping_dict (dict): a dictionary that maps labels into numeric values 
+                                   in order to make the output ready for other processing functions
+
+        ## Returnes
+            The mapped input series
+    """
+    return dx.copy(deep=True) \
+                .map(lambda x: 'Non-Demented' if x in non_dem else 'Demented') \
+                .map(mapping_dict)            
+
+
+def get_final_labels(
+        df:pd.DataFrame, 
+        diagnosis_col_name:str, 
+        cdr_col_name:str, 
+        mapping_dict:dict,
+        reverse_mapping:bool=False
+    ) -> pd.Series:
+    """
+        This function helps retrieving the final versions of the labels: namely
+        Non-Demented, Demented and MCI.
+
+        ## Args
+            - df (pd.DataFrame): the input DataFrame with the diagnosis column in it
+            - diagnosis_col_name (str): the name of the column contining the diagnosis information in `df`
+            - cdr_col_name (str): the name of the CDR column inside `df`
+            - mapping_dict (dict): a dictionary that maps labels into numeric values 
+                                   (the same one passed to `simplify_diagnosis_label`)
+            - reverse_mapping (bool): if True returns the labels string instead then mapped labels'number
+
+        ## Returns
+            A series containing the dataset labels
+    """
+    df_copy:pd.DataFrame = df[[diagnosis_col_name, cdr_col_name]].copy(deep=True)
+
+    mapping_function = (
+        lambda x: mapping_dict['MCI']
+                    # Define the condition for the MCI labels
+                    if (x.loc[cdr_col_name] == 0.5 and 
+                        x.loc[diagnosis_col_name] == mapping_dict['Demented'])
+                    else x[diagnosis_col_name]
+    )
+
+    labels = df_copy.apply(
+                func=mapping_function,
+                axis='columns'
+    )
     
+    if reverse_mapping:
+        reverse_mapping_dict = {v: k for k, v in mapping_dict.items()}
+        labels = labels.map(reverse_mapping_dict)
+
+    return labels
+
+
+# TODO define a function to incorporate all the dataset extraction logic define here

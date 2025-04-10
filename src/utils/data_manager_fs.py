@@ -4,15 +4,18 @@ import requests
 
 from requests.auth import HTTPBasicAuth
 from zipfile import ZipFile
+from src.utils.data_manager_abstract import OasisDataManagerInterface
 
-class DataManagerMRI:
+
+class FreesurfersManagerMRI(OasisDataManagerInterface):
+    """
+        This class helps you download the MRI folder of the 
+        freesurfer assessments for the OASIS-3 project
+    """
     def __init__(self, freesurfer_output_dir:str):
-        self.output_dir = freesurfer_output_dir
-        self.PROJECT_ID = 'OASIS3'
-        self.BASE_URL = 'https://www.nitrc.org/ir/data/archive/projects/'
-        
-        if not os.path.isdir(freesurfer_output_dir):
-            os.mkdir(freesurfer_output_dir)
+        super().__init__(freesurfer_output_dir)
+        self.project_id = 'OASIS3'
+
 
     def __build_download_url(self, subject:str, experiment:str, assessor:str) -> str:
         """
@@ -38,7 +41,7 @@ class DataManagerMRI:
 
         args = ''.join(args)
 
-        return self.BASE_URL + self.PROJECT_ID + args
+        return self.base_url + self.project_id + args
     
     def __extraction_post_process(
             self,
@@ -112,7 +115,12 @@ class DataManagerMRI:
         os.remove(os.path.join(self.output_dir, experiment_label + '.zip'))
 
 
-    def download(self, subjects_file_path:str, username:str, password:str, files_to_keep:list=[]):
+    def download(
+            self, 
+            subjects_file_path:str, 
+            username:str, password:str, 
+            files_to_keep:list=[]
+    ) -> None:
         """
             Download freesurfer MRI data from the OASIS repository.
             
@@ -173,19 +181,21 @@ class DataManagerMRI:
                         # and the files wanted by the user located inside it
                         self.__extraction_post_process(fs_id, experiment_label, files_to_keep)
                     else:
+                        print(download_response)
                         print(download_url)  
         else:
             raise Exception("""There must be at list one subject freesurfer id in 
                                the input csv specified with output_dir paramater. Got None.""")
 
-    def clean_freesurfers(self, base_empty_dir:str, mri_dir:str='mri') -> None:
+    def clean(self, base_empty_dir, check_dir) -> None:
         """
             When data is downloaded some folder may be empty. This method transfer these folders
             to a new directory, cleaning `output_dir`.
             
             ## Args
                 - base_empty_dir (str): the path to the folder that will contain empty freesurfers
-                - mri_dir (str): the name of the mri folder (usually mri)
+                - check_dir (str): the name (not the path) of the directory whose emptiness will be
+                                   checked inside the downloaded experiments folders
             
             ## Returns 
                 The method does not return any value but it modify folder structure
@@ -199,7 +209,7 @@ class DataManagerMRI:
             # The folder to move
             source_path = os.path.join(self.output_dir, d)
 
-            mri_path = os.path.join(source_path, mri_dir)
+            mri_path = os.path.join(source_path, check_dir)
 
             # len == 1 for empty folder since there's always a file called .xdebug_mris_calc
             if len(os.listdir(mri_path)) == 1:
