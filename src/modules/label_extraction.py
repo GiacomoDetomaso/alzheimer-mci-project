@@ -170,23 +170,29 @@ def align_labels(df:pd.DataFrame, subject_col_name:str, target_col_name:str) -> 
     for subject in subjects_list:
         sub_df_cond = df_copy[subject_col_name] == subject
 
-        cdr_series = df_copy.loc[sub_df_cond, target_col_name]
+        target_series = df_copy.loc[sub_df_cond, target_col_name]
 
-        if not cdr_series.is_monotonic_increasing:
-            cdr_list = cdr_series.tolist()
+        if not target_series.is_monotonic_increasing:
+            target_list = target_series.tolist()
+            print(subject)
             
-            for i in range(1, len(cdr_list), 1):
+            for i in range(1, len(target_list), 1):
                 # Update the cdr by substituting element i with element i-1 when element i 
                 # is less then element i-1, since cdr must be monotonically increasing
-                cdr_list[i] = cdr_list[i] if (cdr_list[i-1] <= cdr_list[i]) else cdr_list[i-1]
-            
+                target_list[i] = target_list[i] if (target_list[i-1] <= target_list[i]) else target_list[i-1]
+                
             # Assign the updated series on the current slice of the dataframe
-            df_copy.loc[sub_df_cond, target_col_name] = pd.Series(cdr_list, cdr_series.index)
+            df_copy.loc[sub_df_cond, target_col_name] = pd.Series(target_list, target_series.index)
 
     return df_copy[target_col_name]
 
 
-def simplify_diagnosis_label(dx: pd.Series, non_dem:list, mapping_dict:dict):
+def simplify_diagnosis_label(
+        dx: pd.Series, 
+        non_dem:list, 
+        ques_dem:list, 
+        mapping_dict:dict
+    ):
     """
         This function maps the diagnosis labels into two main category: Non-Demented
         and Demented.
@@ -200,9 +206,12 @@ def simplify_diagnosis_label(dx: pd.Series, non_dem:list, mapping_dict:dict):
         ## Returnes
             The mapped input series
     """
-    return dx.copy(deep=True) \
-                .map(lambda x: 'Non-Demented' if x in non_dem else 'Demented') \
-                .map(mapping_dict)            
+    return (dx.copy(deep=True)
+                .map(
+                    lambda x: 'Non-Demented' if x in non_dem 
+                               else 'Questionable-Demented' if x in ques_dem else 'Demented'
+                )
+                .map(mapping_dict))            
 
 
 def get_final_labels(
@@ -230,10 +239,10 @@ def get_final_labels(
     df_copy:pd.DataFrame = df[[diagnosis_col_name, cdr_col_name]].copy(deep=True)
 
     mapping_function = (
-        lambda x: mapping_dict['MCI']
+        lambda x: mapping_dict['Questionable-Demented']
                     # Define the condition for the MCI labels
                     if (x.loc[cdr_col_name] == 0.5 and 
-                        x.loc[diagnosis_col_name] == mapping_dict['Demented'])
+                        x.loc[diagnosis_col_name] == mapping_dict['Questionable-Demented'])
                     else x[diagnosis_col_name]
     )
 
@@ -244,7 +253,10 @@ def get_final_labels(
     
     if reverse_mapping:
         reverse_mapping_dict = {v: k for k, v in mapping_dict.items()}
-        labels = labels.map(reverse_mapping_dict)
+        
+        labels = labels \
+                    .map(reverse_mapping_dict) \
+                    .map(lambda x: 'MCI' if x == 'Questionable-Demented' else x)
 
     return labels
 
