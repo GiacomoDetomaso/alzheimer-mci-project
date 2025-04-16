@@ -240,9 +240,7 @@ def get_final_labels(
 
     mapping_function = (
         lambda x: mapping_dict['Questionable-Demented']
-                    # Define the condition for the MCI labels
-                    if (x.loc[cdr_col_name] == 0.5 and 
-                        x.loc[diagnosis_col_name] == mapping_dict['Questionable-Demented'])
+                    if x.loc[cdr_col_name] == 0.5 # Define the condition for the MCI labels
                     else x[diagnosis_col_name]
     )
 
