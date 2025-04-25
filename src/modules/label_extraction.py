@@ -1,6 +1,13 @@
 import pandas as pd
 import numpy as np
 
+"""
+    A module which provides functions to manipulate two dataframe: one related 
+    to the freesurfers scan and the other one related to diagnosis. The purpose
+    of this module is to provide high level APIs to the "2_target_label_definition.ipynb" 
+    notebook that extracts a new dataset with the final labels (from the aforementioned datasets).
+"""
+
 def get_time_column(col:pd.Series) -> pd.Series:
     """
         This function extract the time period of the vist 
@@ -52,7 +59,7 @@ def __map_time_to_CDR(
         x:int, 
         sub_target_df:pd.DataFrame, 
         time_col_name:str, 
-        cdr_col_name:str,
+        target_col_name:str,
     ):
     # The possible labels are the ones where the time value in the target_df is greater or lower 
     # than x (which is the time value for the current subject in the outer loop). 
@@ -72,8 +79,8 @@ def __map_time_to_CDR(
         lower_bound_idx = possible_lower_bounds[time_col_name].idxmax() 
 
     # Extract upper and lower bounds corresponding cdr value
-    cdr_ub = possible_upper_bounds.loc[upper_bound_idx, cdr_col_name] if upper_bound_idx != None else None
-    cdr_lb = possible_lower_bounds.loc[lower_bound_idx, cdr_col_name] if lower_bound_idx != None else None
+    cdr_ub = possible_upper_bounds.loc[upper_bound_idx, target_col_name] if upper_bound_idx != None else None
+    cdr_lb = possible_lower_bounds.loc[lower_bound_idx, target_col_name] if lower_bound_idx != None else None
 
     if cdr_ub == None:
         # The upper bound cdr is empty
@@ -102,22 +109,20 @@ def get_mapped_target_column(
         time_col_name:str='time',
     ) -> pd.DataFrame:
     """
-        This function returns a column containing the CDR of a subject who underwent 
-        an MRI scan in a certain period of time. It maps the time period of the MRI 
-        scan with the assessment of CDR made (usually immediately following the scan).
+        This function maps the values inside a column of `target_df` to the rows of `source_df`. 
+        A value is mapped from target to source, according to the time period on which it was
+        registered. 
         
         ## Args
-            - target_df (pd.DataFrame): it contains the data abount CDR assessment to extract
-            - source_df (pd.DataFrame): it contains the data on which the CDR info needs to be added
+            - target_df (pd.DataFrame): it contains the data abount the target to extract
+            - source_df (pd.DataFrame): it contains the data on which the target info needs to be added
             - subject_col_name (str): the name of the subject column (the one that contains 
                                       values like OAS30001) in `source_df`
             - target_col_name (str): the name of the column containg target informations in `target_df`
-            - diagnosis_col_name (str): the name of the column contining the diagnosis information in target_df`
             - time_col_name (str): the name of the column containig time information inside both df
             
         ## Returns
-            A DataFrame with the same rows as `source_df` with the columns 
-            [`target_col_name`, `diagnosis_col_name`]
+            A series where the value of the target column are mapped to fit into `source_df` 
     """
     subjects_list = source_df[subject_col_name].unique().tolist()
     source_df_copy = source_df.copy(deep=True)
@@ -133,7 +138,7 @@ def get_mapped_target_column(
         # Args to pass to pandas apply method: 
         # 1) Target dataframe slice related to actual subject
         # 2) Name of time column
-        # 3) Name of CDR column which is the target
+        # 3) Name of target column
         args = (target_df[sub_target_cond], time_col_name, target_col_name)
 
         source_df_copy.loc[sub_source_cond, target_col_name] = (
@@ -194,8 +199,8 @@ def simplify_diagnosis_label(
         mapping_dict:dict
     ):
     """
-        This function maps the diagnosis labels into two main category: Non-Demented
-        and Demented.
+        This function maps the diagnosis labels into three main category: 
+        Non-Demented, Questionable-Demented and Demented.
 
         ## Args
             - dx (pd.Series): the series of the diagnosis 
@@ -203,7 +208,7 @@ def simplify_diagnosis_label(
             - mapping_dict (dict): a dictionary that maps labels into numeric values 
                                    in order to make the output ready for other processing functions
 
-        ## Returnes
+        ## Returns
             The mapped input series
     """
     return (dx.copy(deep=True)
@@ -259,4 +264,4 @@ def get_final_labels(
     return labels
 
 
-# TODO define a function to incorporate all the dataset extraction logic define here
+# TODO define a function to incorporate all the dataset extraction logic defined here
