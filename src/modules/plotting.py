@@ -55,7 +55,7 @@ def processed_example_comparison_plot(
     plotting.plot_img(preprocessed, cmap='gray', title=f'{subject} preprocessed');
 
 
-def plot_img_by_experiment_id(dir:str, id:str, extension:str='nii.gz'):
+def plot_img_by_experiment_id(dir:str, id:str, file_name_left:str, file_name_right:str):
     """
         A function that plots the left and right hippocampus of a subject's experiment,
         given its id (the MR session)
@@ -68,8 +68,8 @@ def plot_img_by_experiment_id(dir:str, id:str, extension:str='nii.gz'):
         ## Returns
             Displays the plot
     """
-    img_left = nib.load(os.path.join(dir, id, f'posterior_Left-Hippocampus.{extension}'))
-    img_right = nib.load(os.path.join(dir, id, f'posterior_Right-Hippocampus.{extension}'))
+    img_left = nib.load(os.path.join(dir, id, file_name_left))
+    img_right = nib.load(os.path.join(dir, id, file_name_right))
 
-    plotting.plot_img(img_left, cmap='gray', title=f'{id} left hippocampus');
-    plotting.plot_img(img_right, cmap='gray', title=f'{id} right hippocampus');
+    plotting.plot_img(img_left, cmap='gray', title=f'{id} Left');
+    plotting.plot_img(img_right, cmap='gray', title=f'{id} Right');

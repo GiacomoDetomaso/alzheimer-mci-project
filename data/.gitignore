@@ -6,6 +6,7 @@ freesurfers_undersampled
 test_freesurfers
 test_freesurfers_preprocess
 train_freesurfers
+train_full
 train_freesurfers_preprocess
 validation_freesurfers
 validation_freesurfers_preprocess

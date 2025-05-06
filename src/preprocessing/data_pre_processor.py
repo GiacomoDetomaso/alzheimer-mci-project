@@ -16,11 +16,12 @@ from monai.transforms import (
 	EnsureTyped,
 	EnsureChannelFirstd,
 	LoadImaged,
-	NormalizeIntensityd,
     Flipd,
     Rotated,
 	Resized,
 	ScaleIntensityd,
+    AdjustContrastd,
+    NormalizeIntensityd,
 	Spacingd,
 	SpatialPadd,
     ToTensord,
@@ -63,6 +64,11 @@ class PreprocessingOperations:
         keys='image',
     )
 
+    CONTRAST = Compose([
+        AdjustContrastd(keys='image', gamma=0.2),
+        #NormalizeIntensityd(keys='image', nonzero=True)
+    ])
+
     CAST_TENSOR = ToTensord(keys='image')
 
     @staticmethod
@@ -80,9 +86,9 @@ class PreprocessingOperations:
                 The reader object 
         """
         return LoadImaged(
-                keys='image', 
-                reader=reader, 
-                image_only=True
+            keys='image', 
+            reader=reader, 
+            image_only=True
         )
 
     @staticmethod
@@ -118,9 +124,9 @@ class PreprocessingOperations:
                 The `Spatiapadd` object with the input specified spatial size
         """
         return SpatialPadd(
-                    keys='image', 
-                    spatial_size=(spatial_size, spatial_size, spatial_size), 
-                    mode='minimum'
+            keys='image', 
+            spatial_size=(spatial_size, spatial_size, spatial_size), 
+            mode='minimum'
         )
     
     
@@ -139,8 +145,9 @@ class PreprocessingOperations:
             keys='image',
             spatial_size=spatial_size,
             size_mode='longest',
-            mode='bilinear',
-            align_corners=True
+            mode='trilinear',
+            align_corners=True,
+            anti_aliasing=True
         )
 
     

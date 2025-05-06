@@ -111,7 +111,11 @@ class DatasetHelper:
     
         
     @staticmethod
-    def get_dataset_dict(images_path:list, experiments:list, labels:list) -> list[dict]:
+    def get_dataset_dict_preprocessing(
+        images_path:list[str], 
+        experiments:list[str], 
+        labels:list[str]
+    ) -> list[dict]:
         """
             It returns a dictionary dataset with the format required.
 
@@ -126,6 +130,35 @@ class DatasetHelper:
         return [
             {'image': image, 'experiment': experiment, 'label': label, 'path': image}
             for image, experiment, label in zip(images_path, experiments, labels)
+        ]
+    
+
+
+    @staticmethod
+    def get_dataset_dict(
+        left_hippo_paths:list[str], 
+        right_hippo_paths:list[str], 
+        labels:list[str], 
+        experiments:list[str]
+    ):
+        """
+            It returns a dictionary dataset with the format required.
+
+            ## Args
+                - left_hippo_paths (list): the list of paths to add to the dataset under the 'left' key
+                - right_hippo_paths (list): the list of paths to add to the dataset under the 'right' key               
+                - experiments (list): the list of MR session to add to the dataset under the 'experiment' key
+                - labels (list): the list of labels to add to the dataset under the 'label' key
+
+            ## Returns
+                The dataset to feed to torch-like models
+        """
+        return [
+                {'left': left, 'right': right, 'experiment':experiment, 'label': label}
+                for left, right, experiment, label in zip(left_hippo_paths, 
+                                                          right_hippo_paths, 
+                                                          experiments, 
+                                                          labels)
         ]
     
     

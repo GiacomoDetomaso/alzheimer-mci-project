@@ -3,8 +3,6 @@ import src.utils.dataset_helper as dh
 import os
 import importlib
 
-from glob import glob
-
 importlib.reload(dp)
 
 preprocessor = dp.DataPreProcessor
@@ -13,37 +11,43 @@ helper = dh.DatasetHelper
 
 default_operations = lambda size: operations.STD_PREPROCESS + [
         operations.CROP, 
-        operations.get_resize(size), 
-        operations.get_pad(size)
+        operations.get_pad(size[0]),
+        operations.get_resize(size[1]), 
     ]
 
-def get_datasets(base_dir:str, experiments:list, labels:list) -> dict:
+def get_datasets(
+        base_dir:str, 
+        experiments:list, 
+        labels:list,
+        left_file_name:str,
+        right_file_name:str
+    ) -> dict:
     # Remove the suffix from the experiment related to data augmentation,
     # in order to correctly find the path of the images
     experiments_fixed = [
         s.removesuffix('_' + s.split('_')[-1]) 
-            if s.split('_')[-1] in ['flip', 'rot45', 'rot30', 'rot90', 'rot150'] 
+            if s.split('_')[-1] in ['flip', 'rot45', 'rot30', 'rot90', 'rot60'] 
             else s  
         for s in experiments 
     ]
 
-    # Get the paths of the image related to the input experiments 
-    left_hippo_paths = helper.get_image_paths_by_experiments(
+    # Get the paths of the images related to the input experiments 
+    left_paths = helper.get_image_paths_by_experiments(
         base_dir=base_dir, 
-        relative_file_path=os.path.join('mri', 'posterior_Left-Hippocampus.mgz'),
+        relative_file_path=os.path.join('mri', left_file_name),
         experiments=experiments_fixed
     )
 
-    right_hippo_paths = helper.get_image_paths_by_experiments(
+    right_paths = helper.get_image_paths_by_experiments(
         base_dir=base_dir, 
-        relative_file_path=os.path.join('mri', 'posterior_Right-Hippocampus.mgz'),
+        relative_file_path=os.path.join('mri', right_file_name),
         experiments=experiments_fixed
     )
 
-    left_hippo_dataset = helper.get_dataset_dict(sorted(left_hippo_paths), experiments, labels)
-    right_hippo_dataset = helper.get_dataset_dict(sorted(right_hippo_paths), experiments, labels)
+    left_dataset = helper.get_dataset_dict_preprocessing(sorted(left_paths), experiments, labels)
+    right_dataset = helper.get_dataset_dict_preprocessing(sorted(right_paths), experiments, labels)
 
-    return {'left': left_hippo_dataset, 'right': right_hippo_dataset}
+    return {'left': left_dataset, 'right': right_dataset}
 
 
 def test_preprocessing(single_dataset:dict, spatial_size:int, additional_operations:list=[]):
@@ -77,7 +81,10 @@ def max_size_after_crop(train_data:dict, val_data:dict, test_data:dict):
 
 def execute_pre_processing(
         save_dir_name:str, 
-        datasets:dict, spatial_size:int, 
+        datasets:dict, 
+        spatial_size:int, 
+        left_file_name:str,
+        right_file_name:str,
         additional_operations:list=[]
     ):
     if len(additional_operations) != 0:
@@ -87,7 +94,7 @@ def execute_pre_processing(
 
     preprocessor.process(
             save_dir_name=os.path.join('..', 'data', save_dir_name), 
-            file_name='posterior_Left-Hippocampus.nii.gz', 
+            file_name=left_file_name, 
             dataset_dict=datasets['left'],
             description='Processing left hippocampus', 
             pre_process_operations=operations,
@@ -95,7 +102,7 @@ def execute_pre_processing(
 
     preprocessor.process(
         save_dir_name=os.path.join('..', 'data', save_dir_name), 
-        file_name='posterior_Right-Hippocampus.nii.gz', 
+        file_name=right_file_name, 
         dataset_dict=datasets['right'], 
         description='Processing right hippocampus',
         pre_process_operations=operations,

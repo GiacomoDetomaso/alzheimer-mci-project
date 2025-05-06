@@ -63,7 +63,6 @@ class DataSplitterTrainTest:
         # After the transfer of these subjects, they can be removed from the test set
         y_test = y_test.drop(index=train_set_instances_idxs)
 
-
         # We can return the index since scikit preserved the series structure
         return  y_train.index, y_test.index
     
