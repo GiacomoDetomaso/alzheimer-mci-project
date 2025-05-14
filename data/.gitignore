@@ -10,3 +10,7 @@ train_full
 train_freesurfers_preprocess
 validation_freesurfers
 validation_freesurfers_preprocess
+try
+data.zip
+gradcam.np
+input.np

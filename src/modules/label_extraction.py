@@ -101,56 +101,59 @@ def __map_time_to_CDR(
     return final_cdr
 
 
-def get_mapped_target_column(
-        target_df:pd.DataFrame, 
-        source_df:pd.DataFrame,
-        subject_col_name:str,
-        target_col_name:str,
-        time_col_name:str='time',
-    ) -> pd.DataFrame:
-    """
-        This function maps the values inside a column of `target_df` to the rows of `source_df`. 
-        A value is mapped from target to source, according to the time period on which it was
-        registered. 
-        
-        ## Args
-            - target_df (pd.DataFrame): it contains the data abount the target to extract
-            - source_df (pd.DataFrame): it contains the data on which the target info needs to be added
-            - subject_col_name (str): the name of the subject column (the one that contains 
-                                      values like OAS30001) in `source_df`
-            - target_col_name (str): the name of the column containg target informations in `target_df`
-            - time_col_name (str): the name of the column containig time information inside both df
-            
-        ## Returns
-            A series where the value of the target column are mapped to fit into `source_df` 
-    """
-    subjects_list = source_df[subject_col_name].unique().tolist()
-    source_df_copy = source_df.copy(deep=True)
+def put_first(df, firsts_columns):
+    df_copy = df.copy(deep=True)
+    columns = df_copy.columns.to_list()
 
-    # Instantiate the output columns filling them with NA values
-    source_df_copy[target_col_name] = pd.NA
+    for col in firsts_columns:
+        columns.remove(col)
 
-    for subject in subjects_list:
-        # Get sub dataframe related to a particular subject
-        sub_target_cond = target_df[subject_col_name] == subject
-        sub_source_cond = source_df_copy[subject_col_name] == subject
+    return df_copy.reindex(columns=firsts_columns + columns)
 
-        # Args to pass to pandas apply method: 
-        # 1) Target dataframe slice related to actual subject
-        # 2) Name of time column
-        # 3) Name of target column
-        args = (target_df[sub_target_cond], time_col_name, target_col_name)
 
-        source_df_copy.loc[sub_source_cond, target_col_name] = (
-            source_df_copy
-                .loc[sub_source_cond, time_col_name] # Select time column for the slice of target df
-                .apply(
-                    func=__map_time_to_CDR, # apply the previously defined function
-                    args=args
+def session_matchup(df_left, df_right, upper_bound, lower_bound):
+    # Create a Day column from ID
+    # Use the "dXXXX" value from the ID/label in the first column
+    # pandas extract will pull that based on a regular expression no matter where it is.
+
+    df1 = df_left.copy(deep=True)
+    df2 = df_right.copy(deep=True)
+
+    df1['Day'] = (df1
+                    .iloc[:, 0]
+                    .str
+                    .extract(r'(d\d{4})', expand=False)
+                    .str
+                    .strip()
+                    .apply(lambda x: int(x.split('d')[1]))
                 )
-        )
+    
+    df2['Day'] = (df2
+                    .iloc[:,0]
+                    .str
+                    .extract(r'(d\d{4})', expand=False)
+                    .str
+                    .strip()
+                    .apply(lambda x: int(x.split('d')[1]))
+                )
+    
+    if df2.columns[1] != 'Subject':
+        df2 = df2.rename(columns={df2.columns[1]: 'Subject'})
 
-    return source_df_copy[target_col_name]
+    for index, row in df2.iterrows():
+        c1 = (df1['Subject'] == row['Subject'])
+        c2 = (df1['Day'] < row['Day'] + upper_bound)
+        c3 = (df1['Day'] > row['Day'] - lower_bound)
+
+        mask = c1 & c2 & c3   
+        
+        for name in row.index:
+            df1.loc[mask, name] = row[name]
+
+    # Drop rows of which a match was not found
+    df1.dropna(subset=[df2.columns.values[0]], inplace=True)
+
+    return df1
 
 
 def align_labels(df:pd.DataFrame, subject_col_name:str, target_col_name:str) -> pd.Series:
@@ -190,78 +193,3 @@ def align_labels(df:pd.DataFrame, subject_col_name:str, target_col_name:str) -> 
             df_copy.loc[sub_df_cond, target_col_name] = pd.Series(target_list, target_series.index)
 
     return df_copy[target_col_name]
-
-
-def simplify_diagnosis_label(
-        dx: pd.Series, 
-        non_dem:list, 
-        ques_dem:list, 
-        mapping_dict:dict
-    ):
-    """
-        This function maps the diagnosis labels into three main category: 
-        Non-Demented, Questionable-Demented and Demented.
-
-        ## Args
-            - dx (pd.Series): the series of the diagnosis 
-            - non_dem (list): categories to NOT map into dementia
-            - mapping_dict (dict): a dictionary that maps labels into numeric values 
-                                   in order to make the output ready for other processing functions
-
-        ## Returns
-            The mapped input series
-    """
-    return (dx.copy(deep=True)
-                .map(
-                    lambda x: 'Non-Demented' if x in non_dem 
-                               else 'Questionable-Demented' if x in ques_dem else 'Demented'
-                )
-                .map(mapping_dict))            
-
-
-def get_final_labels(
-        df:pd.DataFrame, 
-        diagnosis_col_name:str, 
-        cdr_col_name:str, 
-        mapping_dict:dict,
-        reverse_mapping:bool=False
-    ) -> pd.Series:
-    """
-        This function helps retrieving the final versions of the labels: namely
-        Non-Demented, Demented and MCI.
-
-        ## Args
-            - df (pd.DataFrame): the input DataFrame with the diagnosis column in it
-            - diagnosis_col_name (str): the name of the column contining the diagnosis information in `df`
-            - cdr_col_name (str): the name of the CDR column inside `df`
-            - mapping_dict (dict): a dictionary that maps labels into numeric values 
-                                   (the same one passed to `simplify_diagnosis_label`)
-            - reverse_mapping (bool): if True returns the labels string instead then mapped labels'number
-
-        ## Returns
-            A series containing the dataset labels
-    """
-    df_copy:pd.DataFrame = df[[diagnosis_col_name, cdr_col_name]].copy(deep=True)
-
-    mapping_function = (
-        lambda x: mapping_dict['Questionable-Demented']
-                    if x.loc[cdr_col_name] == 0.5 # Define the condition for the MCI labels
-                    else x[diagnosis_col_name]
-    )
-
-    labels = df_copy.apply(
-                func=mapping_function,
-                axis='columns'
-    )
-    
-    if reverse_mapping:
-        reverse_mapping_dict = {v: k for k, v in mapping_dict.items()}
-        
-        labels = labels \
-                    .map(reverse_mapping_dict) \
-                    .map(lambda x: 'MCI' if x == 'Questionable-Demented' else x)
-
-    return labels
-
-
-# TODO define a function to incorporate all the dataset extraction logic defined here

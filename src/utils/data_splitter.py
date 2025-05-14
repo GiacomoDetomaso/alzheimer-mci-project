@@ -37,7 +37,7 @@ class DataSplitterTrainTest:
             self.diagnosis,
             stratify=self.diagnosis,
             random_state=42,
-            test_size=0.3
+            test_size=0.2
         )
         # Get series made with the experiment's subjects names (index wont change)
         mapping_lambda = lambda s: s[0]
