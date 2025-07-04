@@ -6,6 +6,7 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import nibabel as nib
 import os
+import numpy as np
 
 from nilearn import plotting
 
@@ -51,6 +52,12 @@ def processed_example_comparison_plot(
         ## Returns
             Displays the plot
     """
+    if len(original.shape) == 4:
+        original = nib.Nifti1Image(original.get_fdata()[0, :, :, :], np.identity(4))
+    
+    if len(preprocessed.shape) == 4:
+        preprocessed = nib.Nifti1Image(preprocessed.get_fdata()[0, :, :, :], np.identity(4))
+
     plotting.plot_img(original, cmap='gray', title=f'{subject} original');
     plotting.plot_img(preprocessed, cmap='gray', title=f'{subject} preprocessed');
 
@@ -63,13 +70,18 @@ def plot_img_by_experiment_id(dir:str, id:str, file_name_left:str, file_name_rig
         ## Args
             - dir (str): the directories that contains the images
             - id (str): the id of the MR session to display
-            - extension (str): the extension of the image file (default nii.gz)
 
         ## Returns
             Displays the plot
     """
     img_left = nib.load(os.path.join(dir, id, file_name_left))
     img_right = nib.load(os.path.join(dir, id, file_name_right))
+
+    if len(img_left.shape) == 4:
+        img_left = nib.Nifti1Image(img_left.get_fdata()[0, :, :, :], np.identity(4))
+    
+    if len(img_right.shape) == 4:
+        img_right = nib.Nifti1Image(img_right.get_fdata()[0, :, :, :], np.identity(4))
 
     plotting.plot_img(img_left, cmap='gray', title=f'{id} Left');
     plotting.plot_img(img_right, cmap='gray', title=f'{id} Right');

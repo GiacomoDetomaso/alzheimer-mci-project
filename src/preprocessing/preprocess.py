@@ -50,12 +50,7 @@ def get_datasets(
     return {'left': left_dataset, 'right': right_dataset}
 
 
-def test_preprocessing(single_dataset:dict, spatial_size:int, additional_operations:list=[]):
-    if len(additional_operations) != 0:
-        operations = default_operations(spatial_size) + additional_operations
-    else:
-        operations = default_operations(spatial_size)
-        
+def test_preprocessing(single_dataset:dict, operations:list=[], ):
     return preprocessor.get_first(single_dataset, operations)
 
 
@@ -82,15 +77,10 @@ def max_size_after_crop(train_data:dict, val_data:dict, test_data:dict):
 def execute_pre_processing(
         save_dir_name:str, 
         datasets:dict, 
-        spatial_size:int, 
         left_file_name:str,
         right_file_name:str,
-        additional_operations:list=[]
+        operations:list=[]
     ):
-    if len(additional_operations) != 0:
-        operations = default_operations(spatial_size) + additional_operations
-    else:
-        operations = default_operations(spatial_size)
 
     preprocessor.process(
             save_dir_name=os.path.join('..', 'data', save_dir_name), 

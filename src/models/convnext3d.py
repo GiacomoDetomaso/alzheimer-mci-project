@@ -57,11 +57,13 @@ class ConvNeXtBase(nn.Module):
 
         self.norm = nn.GroupNorm(num_groups=1, num_channels=dims[-1])
         self.head = nn.Linear(dims[-1], num_classes)
+        self.dropout = nn.Dropout(.3)
         self.pool_layer = pool_layer
 
     def forward(self, x):
         for i in range(4):
             x = self.downsample_layers[i](x)
+            x = self.dropout(x)
             x = self.stages[i](x)
         x = x.mean(dim=self.pool_layer)
         x = self.norm(x)
@@ -72,7 +74,7 @@ class ConvNeXtBase(nn.Module):
 class ConvNeXt3D(ConvNeXtBase):
     def __init__(self, in_chans=1, num_classes=2, depths=[3, 3, 9, 3], dims=[96, 192, 384, 768]):
         super().__init__(in_chans, num_classes, depths, dims, conv_layer=nn.Conv3d, pool_layer=[-1, -2, -3])
-
+        
 class ConvNeXt2D(ConvNeXtBase):
     def __init__(self, in_chans=1, num_classes=2, depths=[3, 3, 9, 3], dims=[96, 192, 384, 768]):
         super().__init__(in_chans, num_classes, depths, dims, conv_layer=nn.Conv2d, pool_layer=[-1, -2])

@@ -20,8 +20,10 @@ from monai.transforms import (
     Rotated,
 	Resized,
 	ScaleIntensityd,
-    AdjustContrastd,
+    HistogramNormalized,
     NormalizeIntensityd,
+    RandScaleIntensityd,
+    RandShiftIntensityd,
 	Spacingd,
 	SpatialPadd,
     ToTensord,
@@ -64,10 +66,12 @@ class PreprocessingOperations:
         keys='image',
     )
 
-    CONTRAST = Compose([
-        AdjustContrastd(keys='image', gamma=0.2),
-        #NormalizeIntensityd(keys='image', nonzero=True)
-    ])
+    CONTRAST = [
+        HistogramNormalized(keys='image'),
+        #NormalizeIntensityd(keys='image', nonzero=True, channel_wise=True),
+	    RandScaleIntensityd(keys='image', factors=0.1, prob=1.0),
+	    RandShiftIntensityd(keys='image', offsets=0.1, prob=1.0),
+    ]
 
     CAST_TENSOR = ToTensord(keys='image')
 
@@ -106,7 +110,8 @@ class PreprocessingOperations:
         return Rotated(
             keys='image',
             angle=(degree * np.pi) / 180,
-            padding_mode='zeros'
+            padding_mode='zeros',
+            align_corners=True
         )
     
     @staticmethod
