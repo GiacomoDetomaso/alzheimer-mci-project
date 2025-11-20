@@ -7,7 +7,7 @@
 ## Project overview
 This project is structured as follow. Since its aim is mainly **experimental**, and due to hardware limitations (which led to model training in platform such as Kaggle) the strutcture is straight-forward:
 - **scripts**: contains bash files to download the oasis dataset and to perform the session matchup as described [here](https://github.com/NrgXnat/oasis-scripts);
-- **src**: sourc code with custom models and preprocessing logic
+- **src**: source code with custom models and preprocessing logic
 - **notebooks**: various experimentations on the dataset (download, preprocessing, hippocampus extraction, DeneNet training, GradCAM)
 ## AD consequences
 - Progressive **cognitive decline** which lead to a **loss of autonomy**
