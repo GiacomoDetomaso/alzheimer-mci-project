@@ -6,7 +6,7 @@
 
 ## Project overview
 This project is structured as follow. Since its aim is mainly **experimental**, and due to hardware limitations (which led to model training in platform such as Kaggle) the strutcture is straight-forward:
-- **scripts**: contains bash files to download the oasis dataset and to perform the session matchup as described [here](https://github.com/NrgXnat/oasis-scripts);
+- **scripts**: contains bash files to download the oasis dataset and to perform the session matchup as described [here](https://github.com/NrgXnat/oasis-scripts)
 - **src**: source code with custom models and preprocessing logic
 - **notebooks**: various experimentations on the dataset (download, preprocessing, hippocampus extraction, DeneNet training, GradCAM)
 ## AD consequences
